@@ -1,0 +1,11 @@
+== Instalacao ==
+
+Copiar a pasta tex para o diretorio do usuario
+Adicionar as linhas
+
+#LATEX
+# Paths are ':' separated
+export TEXINPUTS=".:~/tex:"
+
+ao arquivo ~/.bashrc
+
