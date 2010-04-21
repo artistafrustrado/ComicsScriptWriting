@@ -4,34 +4,10 @@
 import sys
 import re
 import string
+import os
 from string import *
 
-
-class ScritParserOutputHTML:
-    def __init__(self):
-        self.__pageCounter = 0
-
-    def Header(self, title, issue, author, address):
-        ret = "<title>\n<head>\n<title>%s :: %s</title>\n</head>\n<body>\n" % (title, issue)
-        ret += "<div id=\"cover\">\n"
-        ret += "<h1 class=\"title\">%s # %s</h1>\n" % (title, issue)
-        ret += "<h2 class=\"author\">by %s</h2>\n" % author
-        ret += "<div class=\"address\">%s</div>\n" % address
-        ret += "</div>\n"
-        return ret
-    def Footer(self):
-        ret = "\n</body>\n</html>\n"
-        return ret
-
-    def Page(self):
-        self.__panelCounter = 0
-        self.__pageCounter += 1
-        return "<h2>PAGE %s</h2>\n" % self.__pageCounter
-
-    def Panel(self):
-        self.__panelCounter += 1
-        return "<h2>PANEL %s</h2>\n" % self.__panelCounter
-
+sys.path.append('out')
 
 class ScriptParser:
         
@@ -45,11 +21,28 @@ class ScriptParser:
     __headerAuthor = ""
     __headerAddress = ""
 
-    def __init__(self, filename):
+
+    def __init__(self, filename, output = 'html'):
         self._scriptFilename = filename
-        print self._scriptFilename
 #td       check if file exists
-        self.Parse()
+        self._outputModules = {}
+        self.Parse(output)
+
+    def __fileNameToModuleName(self, f):
+        return os.path.splitext(f)[0] 
+
+
+    def __loadOutputFilters(self):
+        path = 'out'
+        files = os.listdir(path)
+        test = re.compile("\.py$", re.IGNORECASE)  
+        files = filter(test.search, files) 
+        moduleNames = map(self.__fileNameToModuleName, files) 
+        modules = map(__import__, moduleNames)  
+
+        for module in moduleNames:
+            self._outputModules[module] = __import__(module)
+
 
     def __removeComments(self, line):
         pattern = '^;' 
@@ -86,40 +79,103 @@ class ScriptParser:
         pattern_page = '^PAGE:'
         pattern_panel = '^PANEL:'
         pattern_dialog = '^([A-Za-z]{1,}) :: '
+        pattern_slug = '^(INT|EXT)\.(.*) - (DAY|NIGHT)'
+        pattern_dialog = '^([A-Za-z]{1,}) :: (.*)$'
+        pattern_caption = '^CAPTION: (.*)$'
+        pattern_sfx = '^SFX: (.*)$'
+        pattern_thought = '^([A-Za-z]{1,}) :T: (.*)$'
+        pattern_ccaption = '^([A-Za-z]{1,}) :C: (.*)$'
+        pattern_burst = '^([A-Za-z]{1,}) :B: (.*)$'
+        pattern_whisper = '^([A-Za-z]{1,}) :W: (.*)$'
+        pattern_wavery = '^([A-Za-z]{1,}) :V: (.*)$'
+        pattern_frosted = '^([A-Za-z]{1,}) :F: (.*)$'
         remove = []
 
         for part in self.__lines:
             if re.search(pattern_page, part):
                 self.__Buffer += self.__outputHandler.Page()
                 remove.append(part)
-            if re.search(pattern_panel, part):
+            elif re.search(pattern_panel, part):
                 self.__Buffer += self.__outputHandler.Panel()
+                remove.append(part)
+            elif re.search(pattern_slug, part):
+                res = re.search(pattern_slug, part)
+                slug = res.groups()
+                self.__Buffer += self.__outputHandler.Slug(slug[0].strip(), slug[1].strip(), slug[2].strip())
+                remove.append(part)
+            elif re.search(pattern_dialog, part):
+                res = re.search(pattern_dialog, part)
+                dialog = res.groups()
+                self.__Buffer += self.__outputHandler.Dialog(dialog[0].strip(), dialog[1].strip())
+                remove.append(part)
+            elif re.search(pattern_caption, part):
+                res = re.search(pattern_caption, part)
+                caption = res.groups()
+                self.__Buffer += self.__outputHandler.Caption(caption[0].strip())
+                remove.append(part)
+            elif re.search(pattern_sfx, part):
+                res = re.search(pattern_sfx, part)
+                sfx = res.groups()
+                self.__Buffer += self.__outputHandler.Sfx(sfx[0].strip())
+                remove.append(part)
+            elif re.search(pattern_thought, part):
+                res = re.search(pattern_thought, part)
+                thought = res.groups()
+                self.__Buffer += self.__outputHandler.Thought(thought[0].strip(), thought[1].strip())
+                remove.append(part)
+            elif re.search(pattern_ccaption, part):
+                res = re.search(pattern_ccaption, part)
+                ccaption = res.groups()
+                self.__Buffer += self.__outputHandler.CCaption(ccaption[0].strip(), ccaption[1].strip())
+                remove.append(part)
+            elif re.search(pattern_burst, part):
+                res = re.search(pattern_burst, part)
+                burst = res.groups()
+                self.__Buffer += self.__outputHandler.Burst(burst[0].strip(), burst[1].strip())
+                remove.append(part)
+            elif re.search(pattern_whisper, part):
+                res = re.search(pattern_whisper, part)
+                whisper = res.groups()
+                self.__Buffer += self.__outputHandler.Whisper(whisper[0].strip(), whisper[1].strip())
+                remove.append(part)
+            elif re.search(pattern_wavery, part):
+                res = re.search(pattern_wavery, part)
+                wavery = res.groups()
+                self.__Buffer += self.__outputHandler.Wavery(wavery[0].strip(), wavery[1].strip())
+                remove.append(part)
+            elif re.search(pattern_frosted, part):
+                res = re.search(pattern_frosted, part)
+                frosted = res.groups()
+                self.__Buffer += self.__outputHandler.Frosted(frosted[0].strip(), frosted[1].strip())
+                remove.append(part)
+            else:
+                self.__Buffer += self.__outputHandler.Text(part)
                 remove.append(part)
         
         for rem in remove:
             self.__lines.remove(rem)
         
 
-    def Parse(self):
+    def Parse(self, output):
+
         fd = open(self._scriptFilename)
         self._scriptString = fd.read()
         fd.close()
+
+        self.__loadOutputFilters()
 
         parts = string.split(self._scriptString, "\n")
         #parts = map(parts, strip)
         parts = map(string.strip, parts)
         parts = map(self.__removeComments, parts)
         parts = filter(None, parts)
-#        print parts
-       
+
         self.__lines = parts
-        
-        self.__outputHandler = ScritParserOutputHTML()
+       
+        self.__outputHandler = self._outputModules[output].ScritParserOutput()
         self.__parseHeader()
         self.__parseBody()
         
-        print self.__lines
-
         self.__buffer  = self.__outputHandler.Header(self.__headerTitle, self.__headerIssue, self.__headerAuthor, self.__headerAddress)
         self.__buffer += self.__Buffer
         self.__buffer += self.__outputHandler.Footer()
@@ -127,4 +183,7 @@ class ScriptParser:
         print self.__buffer;
 
 if __name__ == '__main__':
-    parser = ScriptParser(sys.argv[1])
+    if len(sys.argv) is 3:
+        parser = ScriptParser(sys.argv[1], sys.argv[2])
+    else:
+        parser = ScriptParser(sys.argv[1])
